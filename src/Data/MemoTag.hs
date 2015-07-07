@@ -1,4 +1,6 @@
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Data.MemoTag (
     MemoTag (_mtFunc, _mtValue, _mtResult)
@@ -6,10 +8,16 @@ module Data.MemoTag (
   , mtValue
   , mtValue'
   , mtFunc
+  , mtResult
+  , mtTuple
   ) where
 
 import Data.Profunctor
 import Data.Functor.Contravariant
+import Data.Monoid
+import Data.Ord
+import Data.Function
+import Control.Comonad.Store.Class
 import Control.Comonad
 
 data MemoTag a b = MemoTag { _mtFunc   :: !(a -> b)
@@ -24,6 +32,20 @@ instance Comonad (MemoTag a) where
     extract = _mtResult
     duplicate mt@(MemoTag f v _) = MemoTag (mkMemoTag f) v mt
     extend g mt@(MemoTag f v _)  = MemoTag (g . mkMemoTag f) v (g mt)
+
+instance ComonadStore a (MemoTag a) where
+    pos = _mtValue
+    peek v (MemoTag f _ _) = f v
+    peeks g (MemoTag f v _) = f (g v)
+    seek v (MemoTag f _ _) = MemoTag f v (f v)
+    seeks g (MemoTag f v _) = let v' = g v
+                              in  MemoTag f v' (f v')
+
+instance Eq b => Eq (MemoTag a b) where
+    (==) = on (==) _mtResult
+
+instance Ord b => Ord (MemoTag a b) where
+    compare = comparing _mtResult
 
 mkMemoTag :: (a -> b) -> a -> MemoTag a b
 mkMemoTag f v = MemoTag f v (f v)
@@ -42,4 +64,8 @@ mtFunc g (MemoTag f v _) = flip mkMemoTag v <$> g f
 
 -- mtResult :: Getter (MemoTag a b) b
 mtResult :: (Contravariant f, Functor f) => (b -> f b) -> MemoTag a b -> f (MemoTag a b)
-mtResult g mt@(MemoTag f _ r) = mt <$ g r
+mtResult g mt@(MemoTag _ _ r) = mt <$ g r
+
+-- mtTuple :: Getter (MemoTag a b) b
+mtTuple :: (Contravariant f, Functor f) => ((a, b) -> f (a, b)) -> MemoTag a b -> f (MemoTag a b)
+mtTuple g mt@(MemoTag _ v r) = mt <$ g (v, r)
