@@ -42,7 +42,7 @@ ghci> view mtResult mt
 3.162278            -- square root of 10
 ghci> view mtResult mt'
 4.472136            -- square root of 20
-ghci> view mtResult mt'
+ghci> view mtResult mt''
 5.477226            -- square root of 30
 ~~~
 
@@ -50,6 +50,26 @@ The "result" field is auto-updated when you use `over` and `set`.
 
 You can also map over the function with `mtFunc`, which will also
 auto-update the memoizing field.
+
+Because `mtValue` is a Traversal, you can even have your "mapping
+function" do arbitrary side effects in a monad, like `traverse`:
+
+~~~haskel
+ghci> let x = mkMemoTag (^2) 3
+ghci> x' <- forOf mtValue x $ \y -> do print y
+                                       readLn
+3           -- stdout output
+> 10        -- prompted input with readLn
+ghci> view mtValue x'
+10
+ghci> view mtResult x'
+100
+ghci> view mtTuple x'
+(10, 100)
+~~~
+
+Here, we applied a monadic function to update `mtValue`.
+
 
 Here is a simple example for sorting based on two different things, using the
 `Ord` instance:
@@ -64,7 +84,7 @@ ghci> map (view mtValue) . sort $ xs''
 [-8,-2,-1,-7,-9,-3,-6,-10,-4,-5]
 ~~~
 
-The main power of the lensy interface is both the unified power of using
+One main power of the lensy interface is both the unified power of using
 `over` (for "mapping"), `view` (for "getting"), etc., under one interface, and
 also to be able to "compose" lenses and getters using `(.)`:
 
